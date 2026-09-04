@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head><title>TTS Browser Test</title></head>
+<body>
+<h1>TTS Browser Test</h1>
+<pre id="log" style="font-size:16px; background:#f0f0f0; padding:10px;"></pre>
+<script>
+const logEl = document.getElementById('log');
+function log(msg) {
+  console.log(msg);
+  logEl.textContent += msg + '\n';
+}
+
+async function test() {
+  try {
+    log('1. Starting fetch to n8n TTS webhook...');
+    const res = await fetch('https://dynamo08.app.n8n.cloud/webhook/farmer-tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: 'App kaise hai'})
+    });
+    log('2. Fetch status: ' + res.status);
+    log('3. Fetch content-type: ' + res.headers.get('content-type'));
+    const buf = await res.arrayBuffer();
+    log('4. Buffer length: ' + buf.byteLength + ' bytes');
+    
+    // Check RIFF header
+    const bytes = new Uint8Array(buf);
+    const header = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+    log('5. Header bytes 0-3: ' + header);
+    
+    // Test 1: audioplayers method (data uri with crossOrigin anonymous and createMediaElementSource)
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    const dataUri = 'data:audio/wav;base64,' + base64;
+    log('6. Data URI created, length: ' + dataUri.length);
+    
+    const audio = new Audio();
+    audio.crossOrigin = 'anonymous';
+    audio.src = dataUri;
+    
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      const source = ctx.createMediaElementSource(audio);
+      log('7. createMediaElementSource on Audio with dataUri succeeded!');
+    } catch(err) {
+      log('7. ERROR in createMediaElementSource: ' + err);
+    }
+    
+    audio.onerror = (e) => log('8. Audio element error: ' + (audio.error ? audio.error.message + ' code=' + audio.error.code : 'unknown'));
+    audio.oncanplay = () => log('8. Audio oncanplay event received!');
+    audio.onended = () => log('9. Audio onended event received!');
+    
+    try {
+      await audio.play();
+      log('10. audio.play() succeeded!');
+    } catch(e) {
+      log('10. audio.play() exception: ' + e);
+    }
+    
+    log('11. --- COMPLETED TEST ---');
+  } catch(e) {
+    log('FATAL ERROR: ' + e);
+  }
+}
+test();
+</script>
+</body>
+</html>
